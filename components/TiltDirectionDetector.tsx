@@ -10,7 +10,7 @@ type Direction = typeof directions[number];
 const getRandomDirection = (): Direction => {
     return directions[Math.floor(Math.random() * directions.length)];
 };
-saxd
+
 const softVibration = 100;
 const aggressiveVibration = 500;
 
@@ -18,11 +18,10 @@ const TiltSequenceGame: React.FC = () => {
     const [targetSequence, setTargetSequence] = useState<Direction[]>([getRandomDirection()]);
     const [userSequence, setUserSequence] = useState<Direction[]>([]);
     const [displayedDirection, setDisplayedDirection] = useState<Direction | 'None' | 'Correct' | 'Incorrect'>('None');
-    const [tiltDirection, setTiltDirection] = useState<Direction | 'None'>('None');
     const [countdown, setCountdown] = useState<string | null>(null);
     const [score, setScore] = useState(0);
-    const [awaitingNoDirection, setAwaitingNoDirection] = useState(false);
-    const [showSequence, setShowSequence] = useState(true);
+    const [gameState, setGameState] = useState<'countdown' | 'sequence' | 'input' | 'result'>('countdown');
+    const [lastProcessedDirection, setLastProcessedDirection] = useState<Direction | 'None'>('None');
 
     const directionToEmoji = (direction: Direction | 'None' | 'Correct' | 'Incorrect') => {
         switch (direction) {
@@ -48,96 +47,93 @@ const TiltSequenceGame: React.FC = () => {
         const subscription = Accelerometer.addListener((data) => {
             const { x, y } = data;
 
+            if (gameState !== 'input') return; // Ignore tilt during countdown/sequence
+
             let currentDirection: Direction | 'None' = 'None';
             if (x < -0.5) currentDirection = 'Right';
             else if (x > 0.5) currentDirection = 'Left';
             else if (y < -0.5) currentDirection = 'Up';
             else if (y > 0.5) currentDirection = 'Down';
 
-            if (!awaitingNoDirection) {
-                setTiltDirection(currentDirection);
-                if (currentDirection !== 'None') handleUserInput(currentDirection);
-            }
-
-            if (currentDirection === 'None' && awaitingNoDirection) {
-                setAwaitingNoDirection(false);
+            // Ensure a direction is only processed once until the device returns to neutral
+            if (currentDirection !== 'None' && currentDirection !== lastProcessedDirection) {
+                handleUserInput(currentDirection);
+                setLastProcessedDirection(currentDirection);
+            } else if (currentDirection === 'None') {
+                setLastProcessedDirection('None'); // Reset when back to neutral
             }
         });
 
-        return () => subscription && subscription.remove();
-    }, [awaitingNoDirection]);
+        return () => subscription.remove();
+    }, [gameState, userSequence, targetSequence, lastProcessedDirection]);
 
     useEffect(() => {
-        if (showSequence) {
-            startCountdown();
-        }
-    }, [showSequence]);
+        if (gameState === 'countdown') startCountdown();
+        else if (gameState === 'sequence') displaySequence();
+    }, [gameState]);
 
     const startCountdown = async () => {
         const countdownSteps = ["Ready", "Set", "Go"];
         for (let step of countdownSteps) {
             setCountdown(step);
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second per countdown step
+            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         setCountdown(null);
-        displaySequence();
+        setGameState('sequence');
     };
 
     const displaySequence = async () => {
         for (const direction of targetSequence) {
             setDisplayedDirection(direction);
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Show each direction for 1 second
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Show for 1 second
             setDisplayedDirection('None');
             await new Promise((resolve) => setTimeout(resolve, 500)); // Pause between directions
         }
-        setShowSequence(false);
+        setGameState('input');
     };
 
     const handleUserInput = (direction: Direction) => {
         const updatedUserSequence = [...userSequence, direction];
+
+        console.log('User Input:', updatedUserSequence);
+        console.log('Target Sequence:', targetSequence);
+
         setUserSequence(updatedUserSequence);
 
-        // Show the direction user just entered
         setDisplayedDirection(direction);
+        setTimeout(() => setDisplayedDirection('None'), 500);
 
-        // Hide the emoji after 0.5 seconds
-        setTimeout(() => {
-            setDisplayedDirection('None');
-        }, 500);
+        // Check if input matches target sequence so far
+        const isCorrectSoFar = updatedUserSequence.every((dir, index) => dir === targetSequence[index]);
 
-        if (updatedUserSequence[updatedUserSequence.length - 1] !== targetSequence[updatedUserSequence.length - 1]) {
+        if (!isCorrectSoFar) {
             endRound(false);
-        } else if (updatedUserSequence.length === targetSequence.length) {
-            endRound(true);
+            return;
         }
 
-        setAwaitingNoDirection(true);
+        // If user completes the sequence correctly, end the round
+        if (updatedUserSequence.length === targetSequence.length) {
+            endRound(true);
+        }
     };
 
     const endRound = (isCorrect: boolean) => {
-        if (isCorrect) {
-            Vibration.vibrate(softVibration);
-            setScore(score + 1);
-            setDisplayedDirection("Correct");
+        setGameState('result');
+        setDisplayedDirection(isCorrect ? 'Correct' : 'Incorrect');
+        Vibration.vibrate(isCorrect ? softVibration : aggressiveVibration);
 
-            // Wait for 2 seconds before proceeding to the next round
-            setTimeout(() => {
-                setTargetSequence([...targetSequence, getRandomDirection()]); // Add a new direction for the next round
-                setUserSequence([]);
-                setShowSequence(true);
-            }, 1000); // Display the 'Correct' emoji for 2 seconds
-        } else {
-            Vibration.vibrate(aggressiveVibration);
-            setDisplayedDirection("Incorrect");
-
-            // Wait for 2 seconds before resetting the game
-            setTimeout(() => {
+        setTimeout(() => {
+            if (isCorrect) {
+                setScore((prevScore) => prevScore + 1);
+                setTargetSequence((prevSequence) => [...prevSequence, getRandomDirection()]);
+            } else {
                 setScore(0);
-                setTargetSequence([getRandomDirection()]); // Restart with a single direction
-                setUserSequence([]);
-                setShowSequence(true);
-            }, 1000); // Display the 'Incorrect' emoji for 2 seconds
-        }
+                setTargetSequence([getRandomDirection()]);
+            }
+            setUserSequence([]); // Reset user sequence
+            setDisplayedDirection('None');
+            setGameState('countdown');
+        }, 2000); // Show result for 2 seconds
     };
 
     return (
@@ -148,7 +144,13 @@ const TiltSequenceGame: React.FC = () => {
                 <Text style={styles.emoji}>{directionToEmoji(displayedDirection)}</Text>
             )}
             <Text style={styles.text}>Score: {score}</Text>
-            <Button title="Reset Game" onPress={() => endRound(false)} />
+            <Button title="Reset Game" onPress={() => {
+                setScore(0);
+                setTargetSequence([getRandomDirection()]);
+                setUserSequence([]);
+                setDisplayedDirection('None');
+                setGameState('countdown');
+            }} />
         </View>
     );
 };
