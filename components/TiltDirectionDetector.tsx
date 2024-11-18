@@ -1,7 +1,7 @@
 // src/components/TiltSequenceGame.tsx
 
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, Button, Vibration } from 'react-native';
+import { Text, View, StyleSheet, Button, Vibration, Modal, TouchableOpacity } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 
 const directions = ['Left', 'Right', 'Up', 'Down'] as const;
@@ -22,6 +22,8 @@ const TiltSequenceGame: React.FC = () => {
     const [score, setScore] = useState(0);
     const [gameState, setGameState] = useState<'countdown' | 'sequence' | 'input' | 'result'>('countdown');
     const [lastProcessedDirection, setLastProcessedDirection] = useState<Direction | 'None'>('None');
+    const [showInstructions, setShowInstructions] = useState(true); // State for showing the instructions modal
+    const [isGameStarted, setIsGameStarted] = useState(false); // State to control when the game starts
 
     const directionToEmoji = (direction: Direction | 'None' | 'Correct' | 'Incorrect') => {
         switch (direction) {
@@ -43,6 +45,8 @@ const TiltSequenceGame: React.FC = () => {
     };
 
     useEffect(() => {
+        if (!isGameStarted) return;
+
         Accelerometer.setUpdateInterval(100);
         const subscription = Accelerometer.addListener((data) => {
             const { x, y } = data;
@@ -65,12 +69,14 @@ const TiltSequenceGame: React.FC = () => {
         });
 
         return () => subscription.remove();
-    }, [gameState, userSequence, targetSequence, lastProcessedDirection]);
+    }, [gameState, userSequence, targetSequence, lastProcessedDirection, isGameStarted]);
 
     useEffect(() => {
+        if (!isGameStarted) return;
+
         if (gameState === 'countdown') startCountdown();
         else if (gameState === 'sequence') displaySequence();
-    }, [gameState]);
+    }, [gameState, isGameStarted]);
 
     const startCountdown = async () => {
         const countdownSteps = ["Ready", "Set", "Go"];
@@ -94,9 +100,6 @@ const TiltSequenceGame: React.FC = () => {
 
     const handleUserInput = (direction: Direction) => {
         const updatedUserSequence = [...userSequence, direction];
-
-        console.log('User Input:', updatedUserSequence);
-        console.log('Target Sequence:', targetSequence);
 
         setUserSequence(updatedUserSequence);
 
@@ -138,6 +141,30 @@ const TiltSequenceGame: React.FC = () => {
 
     return (
         <View style={styles.container}>
+            {/* Instructions Modal */}
+            <Modal visible={showInstructions} transparent animationType="slide">
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>🌌 How to Play 🌌</Text>
+                        <Text style={styles.modalText}>
+                            1. Watch the sequence of directions shown on the screen.{"\n"}
+                            2. After the sequence, tilt your device in the correct order to match the sequence.{"\n"}
+                            3. Return the device to a neutral position (flat) between tilts.{"\n"}
+                            4. Try to score as high as possible!
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={() => {
+                                setShowInstructions(false);
+                                setIsGameStarted(true); // Start the game only after the modal is dismissed
+                            }}
+                        >
+                            <Text style={styles.modalButtonText}>🚀 Begin Journey 🚀</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
             {countdown ? (
                 <Text style={styles.countdown}>{countdown}</Text>
             ) : (
@@ -160,21 +187,64 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#000',
+        backgroundColor: '#0d1117',
     },
     text: {
         fontSize: 24,
-        color: '#fff',
+        color: '#80D0C7',
         marginBottom: 20,
+        textShadowColor: '#40E0D0',
+        textShadowRadius: 10,
     },
     emoji: {
         fontSize: 100,
+        textShadowColor: '#ffffff',
+        textShadowRadius: 20,
     },
     countdown: {
         fontSize: 50,
-        color: '#fff',
+        color: '#FFD700',
         marginBottom: 20,
-    }
+        textShadowColor: '#FFA500',
+        textShadowRadius: 15,
+    },
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    },
+    modalContent: {
+        backgroundColor: '#1F1B24',
+        borderRadius: 10,
+        padding: 20,
+        width: '80%',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFD700',
+    },
+    modalTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FFD700',
+        marginBottom: 10,
+    },
+    modalText: {
+        fontSize: 16,
+        textAlign: 'center',
+        color: '#ffffff',
+        marginBottom: 20,
+    },
+    modalButton: {
+        backgroundColor: '#40E0D0',
+        padding: 10,
+        borderRadius: 5,
+    },
+    modalButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });
 
 export default TiltSequenceGame;
