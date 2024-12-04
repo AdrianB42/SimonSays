@@ -1,33 +1,29 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import MathGame from "@/components/MathGame";
-import TiltDirectionDetector from "@/components/TiltDirectionDetector";
+// index.tsx
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
+import AuthScreen from '@/components/AuthScreen';
+import TiltDirectionDetector from '@/components/TiltDirectionDetector';
 
 export default function HomeScreen() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleAuthComplete = () => {
+    setIsAuthenticated(true);
+  };
+
   return (
-    <TiltDirectionDetector/>
-  )
+      <View style={styles.container}>
+        {isAuthenticated ? (
+            <TiltDirectionDetector />
+        ) : (
+            <AuthScreen onAuthComplete={handleAuthComplete} />
+        )}
+      </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  container: {
+    flex: 1,
   },
 });
